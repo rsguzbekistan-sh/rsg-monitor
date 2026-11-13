@@ -26,9 +26,19 @@ perl -pi -e 's/0xFF0071FF/0xFFE30D0C/g; s/0x770071FF/0x77E30D0C/g; s/0xAA0071FF/
 RC=flutter/windows/runner/Runner.rc
 perl -pi -e 's/"RustDesk Remote Desktop"/"RSG monitor"/; s/"ProductName", "RustDesk"/"ProductName", "RSG monitor"/' "$RC"
 
-# 5. verify that every patch landed
+# 5. Windows install fix: the installer copies rustdesk.exe but then starts
+#    "<APP_NAME>.exe", so rename the program file during install (same as update does)
+WIN=src/platform/windows.rs
+perl -0pi -e 's/copy_exe = copy_exe_cmd\(&src_exe, &exe, &path\)\?,\n(\s*)import_config/copy_exe = format!("{}\\n{}", copy_exe_cmd(&src_exe, &exe, &path)?, rename_exe_cmd(&src_exe, &path)?),\n$1import_config/' "$WIN"
+
+# 6. our own server is built in, so hide the "please set up your own server" hint
+perl -0pi -e 's/(pub fn using_public_server\(\) -> bool \{)\n[^\n]*\n\}/$1\n    false\n}/' src/common.rs
+
+# 7. verify that every patch landed
 grep -q "\"$RSG_SERVER\"" "$CFG"          || { echo "server patch failed"; exit 1; }
 grep -qF "\"$RSG_KEY\"" "$CFG"            || { echo "key patch failed"; exit 1; }
 grep -q "\"$APP_NAME\".to_owned" "$CFG"   || { echo "app name patch failed"; exit 1; }
 grep -q "0xFFE30D0C" "$DART"              || { echo "colour patch failed"; exit 1; }
+grep -q "rename_exe_cmd(&src_exe, &path)?),"  "$WIN"  || { echo "install fix failed"; exit 1; }
+grep -A1 "pub fn using_public_server" src/common.rs | grep -q "false" || { echo "server hint patch failed"; exit 1; }
 echo "RSG branding applied: $APP_NAME -> $RSG_SERVER"
