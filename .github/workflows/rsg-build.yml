@@ -1,7 +1,13 @@
 name: RSG monitor build
+run-name: RSG monitor build (${{ inputs.variant }})
 on:
   workflow_dispatch:
     inputs:
+      variant:
+        description: "full = RSG monitor (для вас), host = RSG Host (только принимает подключения)"
+        type: choice
+        options: [full, host]
+        default: full
       upload-artifact:
         type: boolean
         default: true
@@ -36,7 +42,9 @@ env:
   FLUTTER_MACOS_ARM_VERSION: "3.44.9"
   # for arm64 linux because official Dart SDK does not work
   FLUTTER_ELINUX_VERSION: "3.16.9"
-  TAG_NAME: "${{ inputs.upload-tag }}"
+  TAG_NAME: "${{ inputs.variant == 'host' && 'rsg-host' || inputs.upload-tag }}"
+  RSG_VARIANT: "${{ inputs.variant }}"
+  RSG_APP_NAME: "${{ inputs.variant == 'host' && 'RSG-Host' || 'RSG-monitor' }}"
   VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
   # vcpkg version: 2026.07.29
   # If we change the `VCPKG COMMIT_ID`, please remember:
@@ -437,8 +445,10 @@ jobs:
         # is x64 / ARM64; the produced Package.msi is globbed since its bin/<platform>/ dir varies.
       if: env.UPLOAD_ARTIFACT == 'true'
       run: |
+        cp -r ./rustdesk ./rustdesk-rsg
+        mv ./rustdesk-rsg/rustdesk.exe "./rustdesk-rsg/$env:RSG_APP_NAME.exe"
         pushd ./res/msi
-        python preprocess.py --arp -d ../../rustdesk
+        python preprocess.py --arp -d ../../rustdesk-rsg --app-name "$env:RSG_APP_NAME"
         nuget restore msi.sln
         $msiPlatform = if ('${{ matrix.job.arch }}' -eq 'aarch64') { 'ARM64' } else { 'x64' }
         msbuild msi.sln -p:Configuration=Release -p:Platform=$msiPlatform /p:TargetVersion=Windows10
@@ -516,6 +526,16 @@ jobs:
         path: ./SignOutput/rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.msi
         if-no-files-found: error
 
+    - name: RSG file names
+      if: env.UPLOAD_ARTIFACT == 'true'
+      shell: bash
+      run: |
+        cd SignOutput
+        for f in rustdesk-*.exe rustdesk-*.msi; do
+          [ -e "$f" ] || continue
+          mv "$f" "${f/rustdesk-/rustdesk-$RSG_APP_NAME-}"
+        done
+        ls -la
     - name: Publish Release
       uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844   # v1
       if: env.UPLOAD_ARTIFACT == 'true' && env.PUBLISH_UPDATE_METADATA != 'true'
@@ -798,6 +818,15 @@ jobs:
         path: ./rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.dmg
         if-no-files-found: error
 
+    - name: RSG file names
+      if: env.UPLOAD_ARTIFACT == 'true'
+      shell: bash
+      run: |
+        for f in rustdesk*-${{ matrix.job.arch }}.dmg; do
+          [ -e "$f" ] || continue
+          mv "$f" "${f/rustdesk/rustdesk-$RSG_APP_NAME}"
+        done
+        ls -la *.dmg
     - name: Publish DMG package
       if: env.UPLOAD_ARTIFACT == 'true' && env.PUBLISH_UPDATE_METADATA != 'true'
       uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844   # v1
