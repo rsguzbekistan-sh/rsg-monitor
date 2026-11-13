@@ -535,7 +535,7 @@ jobs:
       fail-fast: false
       matrix:
         job:
-        - {target: aarch64-apple-darwin, os: macos-26, extra-build-args: "--screencapturekit", extra-cargo-features: ",screencapturekit", arch: aarch64, vcpkg-triplet: arm64-osx}
+        - {target: aarch64-apple-darwin, os: macos-15, extra-build-args: "--screencapturekit", extra-cargo-features: ",screencapturekit", arch: aarch64, vcpkg-triplet: arm64-osx}
     steps:
     - name: Export GitHub Actions cache environment variables
       uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410   # v6
