@@ -7,7 +7,9 @@ cd "$(dirname "$0")/.."
 : "${RSG_SERVER:?Secret RSG_SERVER is not set (Settings > Secrets and variables > Actions)}"
 : "${RSG_KEY:?Secret RSG_KEY is not set (Settings > Secrets and variables > Actions)}"
 APP_NAME="${RSG_APP_NAME:-RSG-monitor}"
-export RSG_SERVER RSG_KEY APP_NAME
+VARIANT="${RSG_VARIANT:-full}"
+if [ "$VARIANT" = host ]; then PRODUCT="RSG Host"; else PRODUCT="RSG monitor"; fi
+export RSG_SERVER RSG_KEY APP_NAME PRODUCT
 
 # 1. icons and logos
 cp -R rsg/overlay/. .
@@ -24,7 +26,7 @@ perl -pi -e 's/0xFF0071FF/0xFFE30D0C/g; s/0x770071FF/0x77E30D0C/g; s/0xAA0071FF/
 
 # 4. Windows file properties
 RC=flutter/windows/runner/Runner.rc
-perl -pi -e 's/"RustDesk Remote Desktop"/"RSG monitor"/; s/"ProductName", "RustDesk"/"ProductName", "RSG monitor"/' "$RC"
+perl -pi -e 's/"RustDesk Remote Desktop"/"$ENV{PRODUCT}"/; s/"ProductName", "RustDesk"/"ProductName", "$ENV{PRODUCT}"/' "$RC"
 
 # 5. Windows install fix: the installer copies rustdesk.exe but then starts
 #    "<APP_NAME>.exe", so rename the program file during install (same as update does)
@@ -34,6 +36,12 @@ perl -0pi -e 's/copy_exe = copy_exe_cmd\(&src_exe, &exe, &path\)\?,(\r?\n\s*)imp
 # 6. our own server is built in, so hide the "please set up your own server" hint
 perl -0pi -e 's/(pub fn using_public_server\(\) -> bool \{)(\r?\n)[^\r\n]*\r?\n\}/$1$2    false$2}/' src/common.rs
 
+# 6b. host variant: incoming connections only (no "connect to" field, cannot control other PCs)
+if [ "$VARIANT" = host ]; then
+  perl -0pi -e 's/pub static ref HARD_SETTINGS: RwLock<HashMap<String, String>> = Default::default\(\);/pub static ref HARD_SETTINGS: RwLock<HashMap<String, String>> = RwLock::new(HashMap::from([("conn-type".to_owned(), "incoming".to_owned())]));/' "$CFG"
+  grep -q '"conn-type".to_owned(), "incoming"' "$CFG" || { echo "host patch failed"; exit 1; }
+fi
+
 # 7. verify that every patch landed
 grep -q "\"$RSG_SERVER\"" "$CFG"          || { echo "server patch failed"; exit 1; }
 grep -qF "\"$RSG_KEY\"" "$CFG"            || { echo "key patch failed"; exit 1; }
@@ -41,4 +49,4 @@ grep -q "\"$APP_NAME\".to_owned" "$CFG"   || { echo "app name patch failed"; exi
 grep -q "0xFFE30D0C" "$DART"              || { echo "colour patch failed"; exit 1; }
 grep -q "rename_exe_cmd(&src_exe, &path)?),"  "$WIN"  || { echo "install fix failed"; exit 1; }
 grep -A1 "pub fn using_public_server" src/common.rs | grep -q "false" || { echo "server hint patch failed"; exit 1; }
-echo "RSG branding applied: $APP_NAME -> $RSG_SERVER"
+echo "RSG branding applied: $APP_NAME ($VARIANT) -> $RSG_SERVER"
