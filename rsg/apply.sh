@@ -29,10 +29,10 @@ perl -pi -e 's/"RustDesk Remote Desktop"/"RSG monitor"/; s/"ProductName", "RustD
 # 5. Windows install fix: the installer copies rustdesk.exe but then starts
 #    "<APP_NAME>.exe", so rename the program file during install (same as update does)
 WIN=src/platform/windows.rs
-perl -0pi -e 's/copy_exe = copy_exe_cmd\(&src_exe, &exe, &path\)\?,\n(\s*)import_config/copy_exe = format!("{}\\n{}", copy_exe_cmd(&src_exe, &exe, &path)?, rename_exe_cmd(&src_exe, &path)?),\n$1import_config/' "$WIN"
+perl -0pi -e 's/copy_exe = copy_exe_cmd\(&src_exe, &exe, &path\)\?,(\r?\n\s*)import_config/copy_exe = format!("{}\\n{}", copy_exe_cmd(&src_exe, &exe, &path)?, rename_exe_cmd(&src_exe, &path)?),$1import_config/' "$WIN"
 
 # 6. our own server is built in, so hide the "please set up your own server" hint
-perl -0pi -e 's/(pub fn using_public_server\(\) -> bool \{)\n[^\n]*\n\}/$1\n    false\n}/' src/common.rs
+perl -0pi -e 's/(pub fn using_public_server\(\) -> bool \{)(\r?\n)[^\r\n]*\r?\n\}/$1$2    false$2}/' src/common.rs
 
 # 7. verify that every patch landed
 grep -q "\"$RSG_SERVER\"" "$CFG"          || { echo "server patch failed"; exit 1; }
